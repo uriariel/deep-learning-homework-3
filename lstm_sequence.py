@@ -158,8 +158,6 @@ def evaluate(model, X_test, y_test):
 
 
 def main():
-    device = get_torch_device()
-
     criterion = torch.nn.MSELoss()
 
     noise_values = torch.linspace(0.1, 2.5, 10)
@@ -184,7 +182,7 @@ def main():
     plt.plot(noise_values, noise_values, 'b', label="Test Loss")
     plt.xlabel("Noise")
     plt.ylabel("Loss")
-    plt.legend(loc="center")
+    plt.legend(loc="upper left")
     plt.title('Sequence LSTM - noises')
     plt.show()
 
