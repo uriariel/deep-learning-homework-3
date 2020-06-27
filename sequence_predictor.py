@@ -3,17 +3,20 @@ import torch
 import torch.nn as nn
 from statsmodels.tsa.arima_process import arma_generate_sample
 
+from utils import get_torch_device, plot_losses
+
+LEARNING_RATE = 0.00001
 NUM_EPOCHS = 50
 
-SEQ_SIZE = 1
+SEQ_SIZE = 10
 INPUT_SIZE = 1
 BATCH_SIZE = 10
 OUTPUT_DIM = 1
 NUM_LAYERS = 2
 
 gradients_norm = 5
-train_size = 5000
-test_size = 100
+train_size = 10500
+test_size = 1000
 
 
 class DataMaker:
@@ -55,12 +58,10 @@ class DataMaker:
         return X, y
 
 
-def get_batches(X, y, batch_size, seq_size):
-    num_batches = np.prod(X.shape) // (seq_size * batch_size)
+def get_batches(X, y, batch_size):
+    num_batches = X.size(1) // batch_size
     for i in range(0, num_batches):
-        if y.shape == (1, 9, 1):
-            breakpoint()
-        yield X[:, i:i + batch_size], y[:, i:i + batch_size]
+        yield i, X[:, i:i + batch_size], y[:, i:i + batch_size]
 
 
 # Here we define our model as a class
@@ -90,23 +91,25 @@ class LSTM(nn.Module):
         return y_pred
 
 
-def get_loss_and_train_op(net, lr=0.001):
+def get_loss_and_train_op(net, lr):
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
 
     return criterion, optimizer
 
 
-def train(X, y, batch_size, seq_size, device, net):
-    criterion, optimizer = get_loss_and_train_op(net, 0.01)
-    iteration = 0
+def train(net, X, y, batch_size):
+    train_losses = []
+    test_losses = []
+    criterion, optimizer = get_loss_and_train_op(net, LEARNING_RATE)
 
     for epoch in range(NUM_EPOCHS):
-        batches = get_batches(X, y, batch_size, seq_size)
+        running_loss = 0
         net.init_hidden()
 
-        for x, y in batches:
-            iteration += 1
+        num_batches = X.size(1) // batch_size
+
+        for iteration, X_batch, y_batch in get_batches(X, y, batch_size):
 
             # Tell it we are in training mode
             net.train()
@@ -114,12 +117,8 @@ def train(X, y, batch_size, seq_size, device, net):
             # Reset all gradients
             optimizer.zero_grad()
 
-            # Transfer data to GPU
-            x = torch.tensor(x).to(device)
-            y = torch.tensor(y).to(device)
-
-            logits = net(x)
-            loss = criterion(logits, y)
+            logits = net(X_batch)
+            loss = criterion(logits, y_batch)
 
             loss_value = loss.item()
 
@@ -133,45 +132,30 @@ def train(X, y, batch_size, seq_size, device, net):
 
             optimizer.step()
 
-            if iteration:
-                print('Epoch: {}/{}'.format(epoch, NUM_EPOCHS),
+            running_loss += loss.item() / num_batches
+
+            if iteration % 100 == 0:
+                print('Epoch: {}/{}'.format(epoch + 1, NUM_EPOCHS),
                       'Iteration: {}'.format(iteration),
-                      'Loss: {}'.format(loss_value))
+                      'Loss: {:.20f}'.format(loss_value))
 
-    return net
+        train_losses += [running_loss]
+    #     test_losses += [sum([criterion(model(images.cuda()), test_labels.cuda()).item() for images, test_labels in
+    #                          test_data]) / len(test_data)]
+    # plot_losses()
+    return net, train_losses
 
 
-def predict(device, net, words, n_vocab, vocab_to_int, int_to_vocab, top_k=5):
+def predict(net, X_test):
     net.eval()
 
     state_h, state_c = net.init_hidden()
-    state_h = state_h.to(device)
-    state_c = state_c.to(device)
-    for w in words:
-        ix = torch.tensor([[vocab_to_int[w]]]).to(device)
-        output, (state_h, state_c) = net(ix, (state_h, state_c))
 
-    _, top_ix = torch.topk(output[0], k=top_k)
-    choices = top_ix.tolist()
-    choice = np.random.choice(choices[0])
-
-    words.append(int_to_vocab[choice])
-
-    for _ in range(100):
-        ix = torch.tensor([[choice]]).to(device)
-        output, (state_h, state_c) = net(ix, (state_h, state_c))
-
-        _, top_ix = torch.topk(output[0], k=top_k)
-        choices = top_ix.tolist()
-        choice = np.random.choice(choices[0])
-        words.append(int_to_vocab[choice])
-
-    print(' '.join(words))
+    return net(X_test, (state_h, state_c))
 
 
 def main():
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = 'cpu'
+    device = get_torch_device()
     data_maker = DataMaker()
 
     X_train, y_train = data_maker.get_train_data()
@@ -180,12 +164,11 @@ def main():
     net = LSTM(input_dim=INPUT_SIZE, hidden_dim=SEQ_SIZE, batch_size=BATCH_SIZE, output_dim=OUTPUT_DIM,
                num_layers=NUM_LAYERS)
 
-    net = net.to(device)
+    net, training_losses = train(X=X_train, y=y_train, net=net, batch_size=BATCH_SIZE)
 
-    net = train(X=X_train, y=y_train, device=device, net=net, batch_size=BATCH_SIZE, seq_size=SEQ_SIZE)
-
+    test_losses = np.zeros_like(training_losses)
+    plot_losses(title='Sequence LSTM', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
     # print("Generating Example...")
-    # predict(device, net, initial_words, n_vocab, vocab_to_int, int_to_vocab, top_k=5)
 
 
 if __name__ == '__main__':
