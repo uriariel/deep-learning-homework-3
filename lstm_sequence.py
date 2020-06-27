@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,15 +16,15 @@ OUTPUT_DIM = 1
 NUM_LAYERS = 2
 
 gradients_norm = 5
-train_size = 10500
-test_size = 1000
+train_size = 2000
+test_size = 500
 
 
 class DataMaker:
-    def __init__(self):
+    def __init__(self, noise):
         arparams = np.array([0.6, -0.5, -0.2], dtype=np.double)
         maparams = np.array([], dtype=np.double)
-        noise = 0.1
+        noise = noise
 
         # Generate train and test sequences
         ar = np.r_[1, -arparams]  # add zero-lag and negate
@@ -98,26 +99,26 @@ def get_loss_and_train_op(net, lr):
     return criterion, optimizer
 
 
-def train(net, X, y, batch_size):
+def train(model, X_train, y_train, X_test, y_test, batch_size):
     train_losses = []
     test_losses = []
-    criterion, optimizer = get_loss_and_train_op(net, LEARNING_RATE)
+    criterion, optimizer = get_loss_and_train_op(model, LEARNING_RATE)
 
     for epoch in range(NUM_EPOCHS):
         running_loss = 0
-        net.init_hidden()
+        model.init_hidden()
 
-        num_batches = X.size(1) // batch_size
+        num_batches = X_train.size(1) // batch_size
 
-        for iteration, X_batch, y_batch in get_batches(X, y, batch_size):
+        for iteration, X_batch, y_batch in get_batches(X_train, y_train, batch_size):
 
             # Tell it we are in training mode
-            net.train()
+            model.train()
 
             # Reset all gradients
             optimizer.zero_grad()
 
-            logits = net(X_batch)
+            logits = model(X_batch)
             loss = criterion(logits, y_batch)
 
             loss_value = loss.item()
@@ -128,7 +129,7 @@ def train(net, X, y, batch_size):
             # Update the network's parameters
             optimizer.step()
 
-            _ = torch.nn.utils.clip_grad_norm_(net.parameters(), gradients_norm)
+            _ = torch.nn.utils.clip_grad_norm_(model.parameters(), gradients_norm)
 
             optimizer.step()
 
@@ -140,35 +141,52 @@ def train(net, X, y, batch_size):
                       'Loss: {:.20f}'.format(loss_value))
 
         train_losses += [running_loss]
-    #     test_losses += [sum([criterion(model(images.cuda()), test_labels.cuda()).item() for images, test_labels in
-    #                          test_data]) / len(test_data)]
-    # plot_losses()
-    return net, train_losses
+        test_losses += [sum([criterion(model(X_test), y_test).item()]) / len(X_test)]
+    return model, train_losses, test_losses
 
 
 def predict(net, X_test):
-    net.eval()
+    net.evaluate()
 
     state_h, state_c = net.init_hidden()
 
     return net(X_test, (state_h, state_c))
 
 
+def evaluate(model, X_test, y_test):
+    return np.average(model(X_test) == y_test)
+
+
 def main():
     device = get_torch_device()
-    data_maker = DataMaker()
 
-    X_train, y_train = data_maker.get_train_data()
-    X_test, y_test = data_maker.get_test_data()
+    criterion = torch.nn.MSELoss()
 
-    net = LSTM(input_dim=INPUT_SIZE, hidden_dim=SEQ_SIZE, batch_size=BATCH_SIZE, output_dim=OUTPUT_DIM,
-               num_layers=NUM_LAYERS)
+    noise_values = torch.linspace(0.1, 2.5, 10)
+    noise_loss = []
+    for noise in noise_values:
+        data_maker = DataMaker(noise=noise)
 
-    net, training_losses = train(X=X_train, y=y_train, net=net, batch_size=BATCH_SIZE)
+        X_train, y_train = data_maker.get_train_data()
+        X_test, y_test = data_maker.get_test_data()
 
-    test_losses = np.zeros_like(training_losses)
-    plot_losses(title='Sequence LSTM', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
-    # print("Generating Example...")
+        model = LSTM(input_dim=INPUT_SIZE, hidden_dim=SEQ_SIZE, batch_size=BATCH_SIZE, output_dim=OUTPUT_DIM,
+                     num_layers=NUM_LAYERS)
+
+        model, training_losses, test_losses = train(X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test,
+                                                    model=model, batch_size=BATCH_SIZE)
+
+        plot_losses(title='Sequence LSTM', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
+
+        noise_loss += [criterion(model(X_test), y_test)]
+
+    plt.style.use("ggplot")
+    plt.plot(noise_values, noise_values, 'b', label="Test Loss")
+    plt.xlabel("Noise")
+    plt.ylabel("Loss")
+    plt.legend(loc="center")
+    plt.title('Sequence LSTM - noises')
+    plt.show()
 
 
 if __name__ == '__main__':

@@ -146,15 +146,15 @@ def train(model, dataset: AdderDataset):
 
 
 def predict(model, X_test):
-    model.eval()
+    model.evaluate()
 
     state_h, state_c = model.init_hidden()
 
     return model(X_test).round().int()
 
 
-def eval(model, dataset):
-    model.eval()
+def evaluate(model, dataset):
+    model.evaluate()
     return np.average(torch.nn.utils.rnn.pad_sequence([bitwise_accuracy(model(X_test), y_test) for batch, X_test, y_test in dataset.get_test_batches()]))
 
 
@@ -173,7 +173,7 @@ def main():
     model, training_losses, test_losses = train(model=rnn, dataset=adder_dataset)
 
     plot_losses(title='LSTM Adder', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
-    print(eval(model, dataset=adder_dataset))
+    print(evaluate(model, dataset=adder_dataset))
 
 
 if __name__ == '__main__':

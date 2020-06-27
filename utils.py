@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 
 def get_torch_device():
-    return 'cpu'
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
         return 'cuda'
