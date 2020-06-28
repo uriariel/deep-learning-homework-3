@@ -188,8 +188,8 @@ def main():
     plot_losses(title='LSTM Adder', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
     print(evaluate(model, dataset=adder_dataset))
 
-    adder_dataset1 = AdderDataset(batch_count=10000, train_batch_size=0, test_batch_size=3, device=device)
-    evaluate(model, dataset=adder_dataset1)
+    adder_dataset1 = AdderDataset(batch_count=1000, train_batch_size=0, test_batch_size=3, device=device)
+    print(evaluate(model, dataset=adder_dataset1))
 
 
 if __name__ == '__main__':
