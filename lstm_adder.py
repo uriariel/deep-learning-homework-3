@@ -159,22 +159,16 @@ def predict(model, X_test):
 
 def evaluate(model, dataset):
     dict_per_bit = {i: [] for i in range(20)}
-    dict_per_bit1 = {i: [] for i in range(20)}
 
     for batch, x_test, y_test in dataset.get_test_batches():
         y_pred = model(x_test)
         for i in range(len(y_pred)):
             dict_per_bit[i] += [np.average(bitwise_accuracy(y_pred[i], y_test[i]))]
 
-   #     for x in dict_per_bit:
-    #        dict_per_bit1[x] = dict_per_bit[x].extend([np.random.randint(2 )] * (len(dict_per_bit[0]) - len(dict_per_bit[x])))
     dict_acc_per_bit = {x: np.average(dict_per_bit[x]) for x in dict_per_bit if len(dict_per_bit[x]) > 0}
-
     plot_accuracy_per_bit(dict_acc_per_bit)
 
-        #print(model.evaluate(x_test, y_test))
-    return np.average(torch.nn.utils.rnn.pad_sequence([bitwise_accuracy(model(X_test), y_test)
-                                                       for batch, X_test, y_test in dataset.get_test_batches()]))
+    return np.average([float(x) for x in dict_acc_per_bit.values()])
 
 
 def bitwise_accuracy(y_pred: torch.Tensor, y_test: torch.Tensor) -> torch.Tensor:
@@ -194,7 +188,7 @@ def main():
     plot_losses(title='LSTM Adder', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
     print(evaluate(model, dataset=adder_dataset))
 
-    adder_dataset1 = AdderDataset(batch_count= 10000, train_batch_size=0, test_batch_size=3, device=device)
+    adder_dataset1 = AdderDataset(batch_count=10000, train_batch_size=0, test_batch_size=3, device=device)
     evaluate(model, dataset=adder_dataset1)
 
 
