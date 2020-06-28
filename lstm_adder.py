@@ -185,8 +185,8 @@ def main():
     rnn = RNNAdder(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM, output_dim=OUTPUT_DIM, num_layers=NUM_LAYERS)
     model, training_losses, test_losses = train(model=rnn, dataset=adder_dataset)
 
-    plot_losses(title='LSTM Adder', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
-    print(evaluate(model, dataset=adder_dataset))
+    #plot_losses(title='LSTM Adder', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
+    #print(evaluate(model, dataset=adder_dataset))
 
     adder_dataset1 = AdderDataset(batch_count=1000, train_batch_size=0, test_batch_size=3, device=device)
     print(evaluate(model, dataset=adder_dataset1))
