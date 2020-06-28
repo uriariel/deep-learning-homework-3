@@ -141,7 +141,7 @@ def train(model, X_train, y_train, X_test, y_test, batch_size):
                       'Loss: {:.20f}'.format(loss_value))
 
         train_losses += [running_loss]
-        test_losses += [sum([criterion(model(X_test), y_test).item()]) / len(X_test)]
+        test_losses += [sum([criterion(model(X_test), y_test).item()])]
     return model, train_losses, test_losses
 
 
@@ -174,12 +174,12 @@ def main():
         model, training_losses, test_losses = train(X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test,
                                                     model=model, batch_size=BATCH_SIZE)
 
-        plot_losses(title='Sequence LSTM', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
+        plot_losses(title='Sequence LSTM noise = {}'.format(round(noise.item(), 3)), train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
 
         noise_loss += [criterion(model(X_test), y_test)]
 
     plt.style.use("ggplot")
-    plt.plot(noise_values, noise_values, 'b', label="Test Loss")
+    plt.plot(noise_values,noise_loss, 'b', label="Test Loss")
     plt.xlabel("Noise")
     plt.ylabel("Loss")
     plt.legend(loc="upper left")

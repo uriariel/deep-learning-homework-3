@@ -19,3 +19,15 @@ def plot_losses(epochs, train_loss, test_loss, title=''):
     plt.legend(loc="center")
     plt.title(title)
     plt.show()
+
+
+def plot_accuracy_per_bit(dict_acc_per_bit):
+    plt.style.use("ggplot")
+    plt.plot([int(x) for x in dict_acc_per_bit.keys()],
+             [float(x) for x in dict_acc_per_bit.values()],
+             'b', label="Accuracy per bit")
+    plt.xlabel("bits")
+    plt.ylabel("accuracy")
+    plt.legend(loc="upper left")
+    plt.title("dict_acc_per_bit per bits")
+    plt.show()
