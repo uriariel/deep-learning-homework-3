@@ -7,7 +7,7 @@ import torch
 from torch.nn import Module, LSTM, Linear, MSELoss, Sigmoid
 from torch.optim import Adam
 
-from utils import get_torch_device, plot_losses
+from utils import get_torch_device, plot_losses, plot_accuracy_per_bit
 
 LEARNING_RATE = 0.01
 
@@ -22,14 +22,14 @@ BATCH_COUNT = 1000
 
 
 class AdderDataset:
-    def __init__(self, min_seq_length=3, max_seq_length=20, train_batch_size=20, test_batch_size=5, batch_count=10):
+    def __init__(self, min_seq_length=3, max_seq_length=20, train_batch_size=20, test_batch_size=5, batch_count=10,device='cpu'):
         self.seq_sizes = np.random.randint(min_seq_length, max_seq_length, batch_count)
 
         self.X_train = []
         self.X_test = []
         self.y_train = []
         self.y_test = []
-
+        self.device = device
         for seq_size in self.seq_sizes:
             X_train, y_train, X_test, y_test = self.make_batch(seq_size=seq_size,
                                                                train_batch_size=train_batch_size,
@@ -52,18 +52,18 @@ class AdderDataset:
 
     def get_train_batches(self):
         for batch in range(len(self.X_train)):
-            yield batch, self.normalize_data(self.X_train[batch]), self.normalize_data(self.y_train[batch])
+            yield batch, self.normalize_data(self.X_train[batch], self.device), self.normalize_data(self.y_train[batch], self.device)
 
     def get_test_batches(self):
         for batch in range(len(self.X_train)):
-            yield batch, self.normalize_data(self.X_test[batch]), self.normalize_data(self.y_test[batch])
+            yield batch, self.normalize_data(self.X_test[batch],self.device), self.normalize_data(self.y_test[batch],self.device)
 
     @classmethod
     def get_binarray_product_with_sum(cls, binarrays_product):
         return [[cls.binarray_sum(x, y)] for x, y in binarrays_product]
 
     @staticmethod
-    def normalize_data(data, device='cpu'):
+    def normalize_data(data, device):
         return torch.from_numpy(np.array(data)).transpose(0, 2).transpose(1, 2).float().to(device)
 
     @staticmethod
@@ -98,6 +98,7 @@ class RNNAdder(Module):
         self.lstm = LSTM(self.input_dim, self.hidden_dim, self.num_layers)
         self.fc = Linear(self.hidden_dim, self.output_dim)
         self.sigmoid = Sigmoid()
+        self.lstm.to('cpu')
 
     def forward(self, data):
         lstm_out, hidden = self.lstm(data)
@@ -107,6 +108,9 @@ class RNNAdder(Module):
     def init_hidden(self):
         return (torch.zeros(self.num_layers, self.batch_dim, self.hidden_dim),
                 torch.zeros(self.num_layers, self.batch_dim, self.hidden_dim))
+
+    def evaluate(model, X_test, y_test):
+        return np.average(bitwise_accuracy(model(X_test), y_test))
 
 
 def train(model, dataset: AdderDataset):
@@ -154,8 +158,23 @@ def predict(model, X_test):
 
 
 def evaluate(model, dataset):
-    model.evaluate()
-    return np.average(torch.nn.utils.rnn.pad_sequence([bitwise_accuracy(model(X_test), y_test) for batch, X_test, y_test in dataset.get_test_batches()]))
+    dict_per_bit = {i: [] for i in range(20)}
+    dict_per_bit1 = {i: [] for i in range(20)}
+
+    for batch, x_test, y_test in dataset.get_test_batches():
+        y_pred = model(x_test)
+        for i in range(len(y_pred)):
+            dict_per_bit[i] += [np.average(bitwise_accuracy(y_pred[i], y_test[i]))]
+
+   #     for x in dict_per_bit:
+    #        dict_per_bit1[x] = dict_per_bit[x].extend([np.random.randint(2 )] * (len(dict_per_bit[0]) - len(dict_per_bit[x])))
+    dict_acc_per_bit = {x: np.average(dict_per_bit[x]) for x in dict_per_bit if len(dict_per_bit[x]) > 0}
+
+    plot_accuracy_per_bit(dict_acc_per_bit)
+
+        #print(model.evaluate(x_test, y_test))
+    return np.average(torch.nn.utils.rnn.pad_sequence([bitwise_accuracy(model(X_test), y_test)
+                                                       for batch, X_test, y_test in dataset.get_test_batches()]))
 
 
 def bitwise_accuracy(y_pred: torch.Tensor, y_test: torch.Tensor) -> torch.Tensor:
@@ -163,17 +182,20 @@ def bitwise_accuracy(y_pred: torch.Tensor, y_test: torch.Tensor) -> torch.Tensor
 
 
 def main():
-    device = get_torch_device()
+    device = 'cpu'
     torch.manual_seed(42)
     np.random.seed(42)
 
-    adder_dataset = AdderDataset(batch_count=BATCH_COUNT, train_batch_size=BATCH_SIZE, test_batch_size=3)
+    adder_dataset = AdderDataset(batch_count=BATCH_COUNT, train_batch_size=BATCH_SIZE, test_batch_size=3, device=device)
 
     rnn = RNNAdder(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM, output_dim=OUTPUT_DIM, num_layers=NUM_LAYERS)
     model, training_losses, test_losses = train(model=rnn, dataset=adder_dataset)
 
     plot_losses(title='LSTM Adder', train_loss=training_losses, test_loss=test_losses, epochs=range(NUM_EPOCHS))
     print(evaluate(model, dataset=adder_dataset))
+
+    adder_dataset1 = AdderDataset(batch_count= 10000, train_batch_size=0, test_batch_size=3, device=device)
+    evaluate(model, dataset=adder_dataset1)
 
 
 if __name__ == '__main__':
